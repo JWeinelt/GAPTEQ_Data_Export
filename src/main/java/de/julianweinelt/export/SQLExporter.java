@@ -3,7 +3,6 @@ package de.julianweinelt.export;
 import de.julianweinelt.obj.GAPTEQPage;
 import de.julianweinelt.obj.GAPTEQStatement;
 
-import java.util.List;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 public class SQLExporter extends Exporter {

@@ -31,7 +31,7 @@ public class Main {
 
     private final Gson GSON = new Gson();
 
-    private File folder = new File("C:\\Users\\weinelt\\Documents\\GAPTEQ_Repo\\Qconnect\\public");
+    private File folder;
     private final ConcurrentLinkedDeque<GAPTEQPage> pages = new ConcurrentLinkedDeque<>();
     private final ConcurrentLinkedDeque<GAPTEQStatement> statements = new ConcurrentLinkedDeque<>();
 
@@ -40,13 +40,25 @@ public class Main {
 
     private boolean exportPages;
     private boolean exportStatements;
+    @Getter // TODO: Add options
+    private boolean exportConnections;
+
+    private boolean useSmallBandwidth = false;
+    private boolean enableMultiThreading = false;
 
     private int fileAmount = 0;
 
     private Exporter exporter = new SQLExporter("pages", "statements", false);
 
+    private Taskbar taskbar;
+
+    private final ConcurrentLinkedDeque<JCheckBox> optionButtons = new ConcurrentLinkedDeque<>();
+    private boolean repoLoaded = false;
+
     private JLabel infoLabel;
     private JProgressBar progressBar;
+
+    private JFrame mainFrame;
 
     public static void main(String[] args) {
         instance = new Main();
@@ -54,6 +66,7 @@ public class Main {
     }
 
     private void createGUI() {
+        if (Taskbar.isTaskbarSupported()) taskbar = Taskbar.getTaskbar();
         FlatLightLaf.setup();
         JFrame frame = new JFrame("GAPTEQ Data Exporter");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -63,30 +76,27 @@ public class Main {
 
         progressBar = new JProgressBar();
         progressBar.setPreferredSize(new Dimension(400, 30));
+        progressBar.setStringPainted(true);
+        progressBar.setVisible(false);
 
-        JLabel optionHeader = new JLabel("Options");
-        JCheckBox usePages = new JCheckBox("Export pages");
-        usePages.setEnabled(false);
-        usePages.addActionListener(e -> {
-            exportPages = usePages.isSelected();
-        });
-        JCheckBox useStatements = new JCheckBox("Export statements");
-        useStatements.setEnabled(false);
-        useStatements.addActionListener(e -> {
-            exportStatements = useStatements.isSelected();
-        });
+
+        JCheckBox smallBandWidth = new JCheckBox("Small bandwidth");
+        smallBandWidth.setToolTipText("Will make a small delay between file queries (recommended for slow computers).");
+        smallBandWidth.setEnabled(false);
+        smallBandWidth.addActionListener(e -> useSmallBandwidth = smallBandWidth.isSelected());
+
+        JCheckBox multiThreads = new JCheckBox("Use multiple threads");
+        multiThreads.setEnabled(false);
+        multiThreads.addActionListener(e -> enableMultiThreading = multiThreads.isSelected());
 
         JPanel options = new JPanel();
-        options.add(optionHeader);
-        options.add(usePages);
-        options.add(useStatements);
+        JButton optionButton = new JButton("Select data");
+        optionButton.addActionListener(e -> openSecondGUI());
+        options.add(optionButton);
 
         JCheckBox createTablesBox = new JCheckBox("Attach CREATE TABLE script");
         createTablesBox.setEnabled(false);
-        createTablesBox.addActionListener(e -> {
-            exporter.setCreateTables(createTablesBox.isSelected());
-        });
-        options.add(createTablesBox);
+        createTablesBox.addActionListener(e -> exporter.setCreateTables(createTablesBox.isSelected()));
 
         String[] formats = {"MSSQL", "MySQL", "CSV", "Excel"};
         JComboBox<String> exportOptions = new JComboBox<>(formats);
@@ -113,18 +123,21 @@ public class Main {
         JButton startButton = new JButton("Start export");
         startButton.setEnabled(false);
         startButton.addActionListener(e -> {
+            startButton.setEnabled(false);
             pages.clear();
             statements.clear();
             progressBar.setValue(0);
             progressBar.setMaximum(getFileAmount(folder));
+            progressBar.setVisible(true);
             new Thread(() -> {
                 try {
                     goThroughFiles(folder);
                     saveData();
+                    taskbar.setWindowProgressState(mainFrame, Taskbar.State.OFF);
+                    progressBar.setVisible(false);
+                    startButton.setEnabled(true);
                     infoLabel.setText("All data has been exported. Pages: " + pages.size()
                             + " Statements: " + statements.size());
-                    JOptionPane.showMessageDialog(null, "The selected data has been exported.\n" +
-                            "You may now use it in your database or summaries.");
                     log.info("Finished!");
                 } catch (FileNotFoundException ignored) {
                     label.setText("An internal error occurred. File not found.");
@@ -142,14 +155,12 @@ public class Main {
             public void insertUpdate(DocumentEvent e) {
                 pagesTableName = pageTNameEnter.getText();
                 exporter.setPagesTableName(pagesTableName);
-                log.info("Set pages table name to: {}", pagesTableName);
             }
 
             @Override
             public void removeUpdate(DocumentEvent e) {
                 pagesTableName = pageTNameEnter.getText();
                 exporter.setPagesTableName(pagesTableName);
-                log.info("Set pages table name to: {}", pagesTableName);
             }
 
             @Override
@@ -163,14 +174,12 @@ public class Main {
             public void insertUpdate(DocumentEvent e) {
                 statementTableName = statementsTNameEnter.getText();
                 exporter.setStatementsTableName(statementTableName);
-                log.info("Set statements table name to: {}", statementTableName);
             }
 
             @Override
             public void removeUpdate(DocumentEvent e) {
                 statementTableName = statementsTNameEnter.getText();
                 exporter.setStatementsTableName(statementTableName);
-                log.info("Set statements table name to: {}", statementTableName);
             }
 
             @Override
@@ -187,6 +196,7 @@ public class Main {
 
             int result = chooser.showOpenDialog(frame);
             if (result == JFileChooser.APPROVE_OPTION) {
+                taskbar.setWindowProgressState(mainFrame, Taskbar.State.INDETERMINATE);
                 folder = chooser.getSelectedFile();
                 GAPTEQRepository repo = loadRepo(folder);
                 if (repo == null) {
@@ -198,11 +208,16 @@ public class Main {
                 progressBar.setMaximum(fileAmount);
                 label.setText("Selected repository: " + repo.name() + " (" + fileAmount + " files)");
                 startButton.setEnabled(true);
-                useStatements.setEnabled(true);
-                usePages.setEnabled(true);
+                optionButton.setEnabled(true);
                 exportOptions.setEnabled(true);
                 pageTNameEnter.setEnabled(true);
                 statementsTNameEnter.setEnabled(true);
+                smallBandWidth.setEnabled(true);
+                createTablesBox.setEnabled(true);
+                optionButtons.forEach(p->p.setEnabled(true));
+                repoLoaded = true;
+                //multiThreads.setEnabled(true); // A bit buggy
+                taskbar.setWindowProgressState(mainFrame, Taskbar.State.OFF);
             }
         });
 
@@ -218,10 +233,17 @@ public class Main {
         exitButton.setBounds(frame.getBounds().width - 80, frame.getBounds().height - 50, 40, 20);
         exitButton.addActionListener(e -> System.exit(0));
 
+        JButton helpButton = new JButton("Help");
+        helpButton.addActionListener(e->openHelpGUI());
+
         frame.add(button);
         frame.add(label);
 
+        options.setPreferredSize(new Dimension(400, 40));
         frame.add(options);
+        frame.add(createTablesBox);
+        frame.add(smallBandWidth);
+        frame.add(multiThreads);
         frame.add(export);
 
         frame.add(inputs);
@@ -235,14 +257,63 @@ public class Main {
         frame.add(infoPanel);
         frame.add(progressBar);
 
-        frame.add(exitButton);
+        JPanel otherPanel = new JPanel();
+        otherPanel.setPreferredSize(new Dimension(400, 30));
+        otherPanel.add(helpButton);
+        otherPanel.add(exitButton);
 
+        frame.add(otherPanel);
+
+        frame.setVisible(true);
+        mainFrame = frame;
+    }
+
+    private void openSecondGUI() {
+        JFrame frame = new JFrame("Select data to be exported");
+
+        frame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+        frame.setLayout(new FlowLayout());
+        frame.setBounds(500, 150, 300, 150);
+        frame.setResizable(false);
+
+        JCheckBox usePages = new JCheckBox("Export pages");
+        usePages.setEnabled(repoLoaded);
+        usePages.addActionListener(e -> exportPages = usePages.isSelected());
+        JCheckBox useStatements = new JCheckBox("Export statements");
+        useStatements.setEnabled(repoLoaded);
+        useStatements.addActionListener(e -> exportStatements = useStatements.isSelected());
+        JCheckBox usesConnections = new JCheckBox("Export connections");
+        usesConnections.setEnabled(repoLoaded);
+        usesConnections.addActionListener(e -> exportConnections = usesConnections.isSelected());
+
+        frame.add(usePages);
+        frame.add(useStatements);
+        frame.add(usesConnections);
+
+        optionButtons.add(useStatements);
+        optionButtons.add(usePages);
+        optionButtons.add(usesConnections);
+
+        frame.setVisible(true);
+    }
+
+    private void openHelpGUI() {
+        JFrame frame = new JFrame("GAPTEQ Export guide");
+
+        frame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+        frame.setLayout(new FlowLayout());
+        frame.setBounds(300, 100, 1000, 700);
+        frame.setResizable(false);
+        ImageIcon icon = new ImageIcon("src/main/resources/help1.png");
+
+        // Bild in JLabel anzeigen
+        JLabel label = new JLabel(icon);
+        frame.add(label);
         frame.setVisible(true);
     }
 
     private GAPTEQRepository loadRepo(File folder) {
         File toLoad = new File(folder, "Repository.json");
-        for (File f : folder.listFiles()) log.info("Found file: {}", f.getName());
         if (!toLoad.exists()) {
             log.warn("Repo file does not exist.");
             return null;
@@ -254,14 +325,11 @@ public class Main {
             JsonObject obj = ((JsonElement) GSON.fromJson(reader, JsonElement.class)).getAsJsonObject();
 
             JsonObject jsonObject =  obj.getAsJsonObject();
+            try {Thread.sleep(1000);} catch (InterruptedException ignored) {}
             return new GAPTEQRepository(jsonObject.get("name").getAsString(), jsonObject.get("description").getAsString(),
                     folder);
         } catch (FileNotFoundException ignored) {}
         return null;
-    }
-
-    private boolean isFolderRepo(File file) {
-        return new File(file, "Public").isDirectory();
     }
 
     private int getFileAmount(File file) {
@@ -282,11 +350,27 @@ public class Main {
         File[] files = file.listFiles();
         if (files == null) return;
         for (File f : files) {
-            //try {Thread.sleep(10);} catch (InterruptedException ignored) {}
+            if (useSmallBandwidth) try {Thread.sleep(10);} catch (InterruptedException ignored) {}
             infoLabel.setText("Loading " + f.getName() + "...");
             progressBar.setValue(progressBar.getValue() + 1);
+            double progress = (progressBar.getValue() + 0.0) / progressBar.getMaximum();
+            try {
+                taskbar.setWindowProgressValue(mainFrame, (int) Math.ceil(progress * 100));
+                taskbar.setWindowProgressState(mainFrame, Taskbar.State.NORMAL);
+            } catch (UnsupportedOperationException ex) {
+                log.error(ex.getMessage());
+            }
             if (f.isDirectory()) {
-                goThroughFiles(f);
+                if (enableMultiThreading) {
+                    new Thread(() -> {
+                        try {
+                            goThroughFiles(f);
+                        } catch (FileNotFoundException e) {
+                            printStackTrace(e);
+                        }
+                    }).start();
+                } else
+                    goThroughFiles(f);
             } else {
                 if (f.getName().endsWith(".meta")) {
 
@@ -306,8 +390,8 @@ public class Main {
                     }
                     else {
                         infoLabel.setText("Error: " + f.getName());
-                        log.error("File {} could not be identified as a page or statement.", f.getAbsolutePath());
-                        log.error("Detected type: {}", jsonObject.get("dataType").getAsString());
+                        log.debug("File {} could not be identified as a page or statement.", f.getAbsolutePath());
+                        log.debug("Detected type: {}", jsonObject.get("dataType").getAsString());
                     }
                 }
             }
@@ -350,12 +434,12 @@ public class Main {
 
             // Der Fehler soll im Detail ausgegeben werden
             if (e instanceof IllegalStateException ie) {
-                log.error("The file {} seems not to be a valid JSON page.", f.getName());
-                log.error(ie.getMessage());
+                log.debug("The file {} seems not to be a valid JSON page.", f.getName());
+                log.debug(ie.getMessage());
             }
-            log.error("Page not loaded");
-            log.error(f.getAbsolutePath());
-            log.error(e.getMessage());
+            log.debug("Page not loaded");
+            log.debug(f.getAbsolutePath());
+            log.debug(e.getMessage());
             printStackTrace(e);
             try {Thread.sleep(100);} catch (InterruptedException ignored) {}
         }
@@ -394,12 +478,12 @@ public class Main {
 
             // Der Fehler soll im Detail ausgegeben werden
             if (e instanceof IllegalStateException ie) {
-                log.error("The file {} seems not to be a valid JSON.", f.getName());
-                log.error(ie.getMessage());
+                log.debug("The file {} seems not to be a valid JSON.", f.getName());
+                log.debug(ie.getMessage());
             }
-            log.error("Statement not loaded");
-            log.error(f.getAbsolutePath());
-            log.error(e.getMessage());
+            log.debug("Statement not loaded");
+            log.debug(f.getAbsolutePath());
+            log.debug(e.getMessage());
             printStackTrace(e);
             try {Thread.sleep(100);} catch (InterruptedException ignored) {}
         }
@@ -407,16 +491,23 @@ public class Main {
     }
 
     private void saveData() {
-        try (FileWriter writer = new FileWriter("./export.sql")) {
+        try (FileWriter writer = new FileWriter("./pages.sql")) {
             writer.write(exporter.createPageExport(pages));
         } catch (Exception e) {
-            log.error("Could not save statement file.");
+            log.debug("Could not save pages file.");
+            taskbar.setWindowProgressState(mainFrame, Taskbar.State.ERROR);
+        }
+        try (FileWriter writer = new FileWriter("./statements.sql")) {
+            writer.write(exporter.createStatementExport(statements));
+        } catch (Exception e) {
+            log.debug("Could not save statement file.");
+            taskbar.setWindowProgressState(mainFrame, Taskbar.State.ERROR);
         }
     }
 
     private void printStackTrace(Exception e) {
         for (StackTraceElement element : e.getStackTrace()) {
-            log.error(element.toString());
+            log.debug(element.toString());
         }
     }
 }
