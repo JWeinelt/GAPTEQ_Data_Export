@@ -1,6 +1,5 @@
-package de.julianweinelt;
+package de.julianweinelt.obj;
 
-import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
