@@ -1,5 +1,7 @@
 # ⚙️ GAPTEQ Data Exporter
 
+[![Build](https://github.com/JWeinelt/GAPTEQ_Data_Export/actions/workflows/maven.yml/badge.svg)](https://github.com/JWeinelt/GAPTEQ_Data_Export/actions/workflows/maven.yml)
+
 Welcome to the official repository for the GAPTEQ Exporter. This small software written in Java exports the files used in your repository to a format like SQL or CSV.
 
 ## 🏛️ How does it work?
