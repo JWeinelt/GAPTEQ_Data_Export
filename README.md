@@ -18,5 +18,8 @@ Welcome to the official repository for the GAPTEQ Exporter. This small software 
 > [!NOTE]
 > This tool was primary tested with GAPTEQ version 3.5. Other versions may work, as GAPTEQ uses the same JSON structure over all versions.
 
+## 🎨 Screenshots
+![MainGui](https://github.com/JWeinelt/GAPTEQ_Data_Export/blob/master/screenshots/gui1.png)
+
 ## 📜 License
 This project is licensed under MIT license.
