@@ -40,7 +40,6 @@ public class Main {
 
     private boolean exportPages;
     private boolean exportStatements;
-    @Getter // TODO: Add options
     private boolean exportConnections;
 
     private boolean useSmallBandwidth = false;
@@ -306,7 +305,6 @@ public class Main {
         frame.setResizable(false);
         ImageIcon icon = new ImageIcon("src/main/resources/help1.png");
 
-        // Bild in JLabel anzeigen
         JLabel label = new JLabel(icon);
         frame.add(label);
         frame.setVisible(true);
@@ -388,7 +386,10 @@ public class Main {
                         GAPTEQStatement stmt = loadStatement(f, jsonObject);
                         if (stmt != null) statements.add(stmt);
                     }
-                    else {
+                    else if (jsonObject.get("dataType").getAsString()
+                            .equals("GT.Formy.Repository.UserData.UserConnection") && exportConnections) {
+                        log.debug("User Connection");
+                    } else {
                         infoLabel.setText("Error: " + f.getName());
                         log.debug("File {} could not be identified as a page or statement.", f.getAbsolutePath());
                         log.debug("Detected type: {}", jsonObject.get("dataType").getAsString());
