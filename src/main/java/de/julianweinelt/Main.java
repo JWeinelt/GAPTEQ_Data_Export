@@ -457,6 +457,7 @@ public class Main {
             stmt.setCreatedAt(obj.get("createDate").getAsString());
             stmt.setModifiedBy(obj.get("modifier").getAsString().replace("\\", "\\\\"));
             stmt.setModifiedAt(obj.get("modifyDate").getAsString());
+            String sqlStatement = obj.get("sqlStatement").getAsString();
             JsonReader reader1 = new JsonReader(new FileReader(new File(f.getParent(), secondFileName)));
 
             JsonObject o = ((JsonElement) GSON.fromJson(reader1, JsonElement.class)).getAsJsonObject();
