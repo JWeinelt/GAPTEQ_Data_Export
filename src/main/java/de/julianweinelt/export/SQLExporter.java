@@ -52,18 +52,37 @@ public class SQLExporter extends Exporter {
                     	[connectionName] [varchar](50) NULL,
                     	[statementName] [varchar](200) NULL
                     ) ON [PRIMARY];
-                    """.replace("TBNAME", getPagesTableName()));
-            statement.append("\n\n");
+                    """.replace("TBNAME", getStatementsTableName()))
+                    .append("\n\n");
+            statement.append("""
+                    CREATE TABLE [dbo].[TBNAME_Table_Ref](
+                        [connectionName] [varchar](200) NOT NULL,
+                        [statementName] [varchar](200) NOT NULL,
+                        [tableName] [varchar](200) NOT NULL
+                    );
+                    """.replace("TBNAME", getStatementsTableName()))
+                    .append("\n\n");
         }
         for (GAPTEQStatement s : statements) {
-            statement.append("INSERT INTO ").append(getPagesTableName())
+            statement.append("INSERT INTO ").append(getStatementsTableName())
                     .append(" (creator, createDate, statementName, modifier, modifierDate, connectionName) VALUES('")
                     .append(s.getCreatedBy())
                     .append("', '").append(s.getCreatedAt())
                     .append("', '").append(s.getStatementName())
                     .append("', '").append(s.getModifiedBy())
                     .append("', '").append(s.getModifiedAt())
-                    .append("', '").append(s.getConnectionName()).append("');").append("\n");
+                    .append("', '").append(s.getConnectionName()).append("');\n");
+        }
+
+        statement.append("\n\n");
+
+        for (GAPTEQStatement s : statements) {
+            for (GAPTEQStatement.StatementTable t : s.getTables())
+                statement.append("INSERT INTO ").append(getStatementsTableName()).append("_Table_Ref")
+                        .append(" (connectionName, statementName, tableName) VALUES('")
+                        .append(t.connection()).append("', '")
+                        .append(s.getStatementName()).append("', '")
+                        .append(t.tableName()).append("');\n");
         }
         return statement.toString();
     }

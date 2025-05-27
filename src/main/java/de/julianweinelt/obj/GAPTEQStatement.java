@@ -5,6 +5,7 @@ import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -17,6 +18,14 @@ public class GAPTEQStatement {
     private String modifiedAt;
 
     private final List<StatementTable> tables = new ArrayList<>();
+
+    public void setTables(Set<String> tables) {
+        this.tables.addAll(
+                tables.stream()
+                        .map(tb -> new StatementTable(connectionName, tb))
+                        .toList()
+        );
+    }
 
     public record StatementTable(String connection, String tableName) {}
 }

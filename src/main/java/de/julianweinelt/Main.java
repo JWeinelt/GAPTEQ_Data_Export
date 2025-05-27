@@ -22,7 +22,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 public class Main {
@@ -448,6 +453,7 @@ public class Main {
     }
 
     private GAPTEQStatement loadStatement(File f, JsonObject obj) {
+        // obj is only the meta!
         String secondFileName = f.getName().replace(".meta", "");
 
 
@@ -457,11 +463,16 @@ public class Main {
             stmt.setCreatedAt(obj.get("createDate").getAsString());
             stmt.setModifiedBy(obj.get("modifier").getAsString().replace("\\", "\\\\"));
             stmt.setModifiedAt(obj.get("modifyDate").getAsString());
-            String sqlStatement = obj.get("sqlStatement").getAsString();
             JsonReader reader1 = new JsonReader(new FileReader(new File(f.getParent(), secondFileName)));
 
             JsonObject o = ((JsonElement) GSON.fromJson(reader1, JsonElement.class)).getAsJsonObject();
+
             stmt.setConnectionName(o.get("connectionName").getAsString());
+            String sqlStatement = o.get("sqlStatement").getAsString();
+
+            Set<String> tables = extractTableNames(sqlStatement);
+            stmt.setTables(tables);
+
             String name = f.getAbsolutePath().replace("\\", "/");
             StringBuilder b = new StringBuilder();
             boolean publicFound = false;
@@ -505,6 +516,47 @@ public class Main {
             log.debug("Could not save statement file.");
             taskbar.setWindowProgressState(mainFrame, Taskbar.State.ERROR);
         }
+    }
+
+    public java.util.List<String> parseSqlStatements(String content) {
+        content = content.replaceAll("(?s)/\\*.*?\\*/", ""); // Blockkommentare
+        content = content.replaceAll("(?m)--.*?$", "");      // Zeilenkommentare
+
+        String[] rawStatements = content.split("(?<=;)|\\R{2,}");
+
+        java.util.List<String> statements = new ArrayList<>();
+        for (String stmt : rawStatements) {
+            String trimmed = stmt.trim();
+            if (!trimmed.isEmpty()) {
+                if (trimmed.endsWith(";")) {
+                    trimmed = trimmed.substring(0, trimmed.length() - 1).trim();
+                }
+                statements.add(trimmed);
+            }
+        }
+        return statements;
+    }
+
+    public Set<String> extractTableNames(String sqlContent) {
+        Set<String> tableNames = new HashSet<>();
+
+        sqlContent = sqlContent.replaceAll("(?s)/\\*.*?\\*/", ""); // Blockkommentare
+        sqlContent = sqlContent.replaceAll("(?m)--.*?$", "");      // Zeilenkommentare
+
+        String content = sqlContent.toUpperCase();
+
+        Pattern pattern = Pattern.compile(
+                "\\b(FROM|JOIN|INTO|UPDATE|DELETE FROM|TRUNCATE TABLE|CREATE TABLE|ALTER TABLE|DROP TABLE)\\s+`?([a-zA-Z0-9_.]+)`?",
+                Pattern.CASE_INSENSITIVE
+        );
+
+        Matcher matcher = pattern.matcher(sqlContent);
+        while (matcher.find()) {
+            String table = matcher.group(2);
+            tableNames.add(table);
+        }
+
+        return tableNames;
     }
 
     private void printStackTrace(Exception e) {
