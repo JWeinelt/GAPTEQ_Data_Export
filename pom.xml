@@ -69,6 +69,7 @@
                         <configuration>
                             <mainClass>de.julianweinelt.Main</mainClass>
                             <bundleJre>true</bundleJre>
+                            <customizedJre>false</customizedJre>
                             <runnableJar>target/GAPTEQ_Export-1.0-SNAPSHOT-jar-with-dependencies.jar</runnableJar>
                             <generateInstaller>false</generateInstaller>
                             <administratorRequired>false</administratorRequired>
