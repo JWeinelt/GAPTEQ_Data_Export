@@ -1,11 +1,15 @@
 package de.julianweinelt;
 
+import com.formdev.flatlaf.FlatDarculaLaf;
+import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.Strictness;
 import com.google.gson.stream.JsonReader;
+import de.julianweinelt.data.ConfigManager;
+import de.julianweinelt.data.Theme;
 import de.julianweinelt.export.Exporter;
 import de.julianweinelt.export.SQLExporter;
 import de.julianweinelt.obj.GAPTEQPage;
@@ -64,19 +68,34 @@ public class Main {
 
     private JFrame mainFrame;
 
+    @Getter
+    private ConfigManager configManager;
+
     public static void main(String[] args) {
         instance = new Main();
+        instance.start();
         instance.createGUI();
+    }
+
+    public void start() {
+        configManager = new ConfigManager();
+        configManager.loadConfig();
     }
 
     private void createGUI() {
         if (Taskbar.isTaskbarSupported()) taskbar = Taskbar.getTaskbar();
-        FlatLightLaf.setup();
+        switch (configManager.getConfiguration().getTheme()) {
+            case LIGHT -> FlatLightLaf.setup();
+            case DARK -> FlatDarkLaf.setup();
+            case DARCULA -> FlatDarculaLaf.setup();
+        }
         JFrame frame = new JFrame("GAPTEQ Data Exporter");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setBounds(300, 200, 500, 350);
 
         frame.setLayout(new FlowLayout());
+
+        frame.setJMenuBar(createMenuBar());
 
         progressBar = new JProgressBar();
         progressBar.setPreferredSize(new Dimension(400, 30));
@@ -194,35 +213,8 @@ public class Main {
         JButton button = new JButton("Select folder");
 
         button.addActionListener(e -> {
-            JFileChooser chooser = new JFileChooser();
-            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-            chooser.setDialogTitle("Select a folder with a GAPTEQ repository");
-
-            int result = chooser.showOpenDialog(frame);
-            if (result == JFileChooser.APPROVE_OPTION) {
-                taskbar.setWindowProgressState(mainFrame, Taskbar.State.INDETERMINATE);
-                folder = chooser.getSelectedFile();
-                GAPTEQRepository repo = loadRepo(folder);
-                if (repo == null) {
-                    label.setText("This folder seems not to be a GAPTEQ repository!");
-                    label.setForeground(Color.RED);
-                    return;
-                }
-                fileAmount = getFileAmount(folder);
-                progressBar.setMaximum(fileAmount);
-                label.setText("Selected repository: " + repo.name() + " (" + fileAmount + " files)");
-                startButton.setEnabled(true);
-                optionButton.setEnabled(true);
-                exportOptions.setEnabled(true);
-                pageTNameEnter.setEnabled(true);
-                statementsTNameEnter.setEnabled(true);
-                smallBandWidth.setEnabled(true);
-                createTablesBox.setEnabled(true);
-                optionButtons.forEach(p->p.setEnabled(true));
-                repoLoaded = true;
-                //multiThreads.setEnabled(true); // A bit buggy
-                taskbar.setWindowProgressState(mainFrame, Taskbar.State.OFF);
-            }
+            createRepoFileDialogue(frame, label, startButton, optionButton, exportOptions, pageTNameEnter,
+                    statementsTNameEnter, smallBandWidth, createTablesBox);
         });
 
         infoLabel = new JLabel("");
@@ -272,6 +264,41 @@ public class Main {
         mainFrame = frame;
     }
 
+    private void createRepoFileDialogue(JFrame frame, JLabel label, JButton startButton,
+                                        JButton optionButton, JComboBox<String> exportOptions,
+                                        JTextField pageTNameEnter, JTextField statementsTNameEnter,
+                                        JCheckBox smallBandWidth, JCheckBox createTablesBox) {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setDialogTitle("Select a folder with a GAPTEQ repository");
+
+        int result = chooser.showOpenDialog(frame);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            taskbar.setWindowProgressState(mainFrame, Taskbar.State.INDETERMINATE);
+            folder = chooser.getSelectedFile();
+            GAPTEQRepository repo = loadRepo(folder);
+            if (repo == null) {
+                label.setText("This folder seems not to be a GAPTEQ repository!");
+                label.setForeground(Color.RED);
+                return;
+            }
+            fileAmount = getFileAmount(folder);
+            progressBar.setMaximum(fileAmount);
+            label.setText("Selected repository: " + repo.name() + " (" + fileAmount + " files)");
+            startButton.setEnabled(true);
+            optionButton.setEnabled(true);
+            exportOptions.setEnabled(true);
+            pageTNameEnter.setEnabled(true);
+            statementsTNameEnter.setEnabled(true);
+            smallBandWidth.setEnabled(true);
+            createTablesBox.setEnabled(true);
+            optionButtons.forEach(p->p.setEnabled(true));
+            repoLoaded = true;
+            //multiThreads.setEnabled(true); // A bit buggy
+            taskbar.setWindowProgressState(mainFrame, Taskbar.State.OFF);
+        }
+    }
+
     private void openSecondGUI() {
         JFrame frame = new JFrame("Select data to be exported");
 
@@ -290,9 +317,13 @@ public class Main {
         usesConnections.setEnabled(repoLoaded);
         usesConnections.addActionListener(e -> exportConnections = usesConnections.isSelected());
 
+        JButton exitButton = new JButton("Apply");
+        exitButton.addActionListener(e -> frame.setVisible(false));
+
         frame.add(usePages);
         frame.add(useStatements);
         frame.add(usesConnections);
+        frame.add(exitButton);
 
         optionButtons.add(useStatements);
         optionButtons.add(usePages);
@@ -313,6 +344,65 @@ public class Main {
         JLabel label = new JLabel(icon);
         frame.add(label);
         frame.setVisible(true);
+    }
+
+    public void openSettings() {
+        JFrame frame = new JFrame("GAPTEQ Export Settings");
+
+        frame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+        frame.setLayout(new FlowLayout());
+        frame.setBounds(500, 150, 300, 150);
+        frame.setResizable(false);
+
+        String[] options = {"Light", "Dark", "Darcula"};
+        JComboBox<String> dropdown = new JComboBox<>(options);dropdown.addActionListener(e -> {
+            String selectedItem = (String) dropdown.getSelectedItem();
+            if (selectedItem == null) return;
+            Theme theme = Theme.valueOf(selectedItem.toUpperCase());
+            configManager.getConfiguration().setTheme(theme);
+            configManager.saveConfig();
+            JOptionPane.showConfirmDialog(null, "After changing the theme GAPTEQ exporter has to be restarted.\nContinue?");
+        });
+        frame.add(dropdown);
+
+
+        frame.setVisible(true);
+    }
+
+    private JMenuBar createMenuBar() {
+        JMenuBar bar = new JMenuBar();
+
+        JMenu fileMenu = new JMenu("File");
+        JMenuItem saveItm = new JMenuItem("Save");
+        JMenuItem saveAsItm = new JMenuItem("Save as");
+        JMenuItem openItm = new JMenuItem("Open");
+        JMenuItem exitItm = new JMenuItem("Exit");
+        fileMenu.add(saveItm);
+        fileMenu.add(saveAsItm);
+        fileMenu.add(openItm);
+        fileMenu.add(exitItm);
+
+        JMenu editMenu = new JMenu("Edit");
+        JMenuItem loadRepoItm = new JMenuItem("Load repository");
+        JMenuItem preferencesItm = new JMenuItem("Preferences");
+        preferencesItm.addActionListener(e -> openSettings());
+        JMenu exportMenu = new JMenu("Export...");
+        JCheckBoxMenuItem exportPagesItm = new JCheckBoxMenuItem("Pages");
+        JCheckBoxMenuItem exportStatementsItm = new JCheckBoxMenuItem("Statements");
+        JCheckBoxMenuItem exportStatementTablesItm = new JCheckBoxMenuItem("Table References");
+        JCheckBoxMenuItem exportConnectionsItm = new JCheckBoxMenuItem("Connections");
+        exportMenu.add(exportPagesItm);
+        exportMenu.add(exportStatementsItm);
+        exportMenu.add(exportStatementTablesItm);
+        exportMenu.add(exportConnectionsItm);
+        editMenu.add(loadRepoItm);
+        editMenu.add(preferencesItm);
+        editMenu.add(exportMenu);
+
+        bar.add(fileMenu);
+        bar.add(editMenu);
+
+        return bar;
     }
 
     private GAPTEQRepository loadRepo(File folder) {

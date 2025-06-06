@@ -6,7 +6,7 @@ Welcome to the official repository for the GAPTEQ Exporter. This small software 
 
 ## 🏛️ How does it work?
 1. 📥 Download the .jar file
-2. 🔓 Open it using a double click or via command line: `java -jar gapteq_export.jar`
+2. 🔓 Open it with a double click or via command line: `java -jar gapteq_export.jar`
 3. 📂 Select the folder of your repository  (using a copy is recommended!)
 4. ⚙️ Edit your export options
 5. 📤 Export!
@@ -23,6 +23,7 @@ Welcome to the official repository for the GAPTEQ Exporter. This small software 
 
 ## 📜 License
 This project is licensed under MIT license.
+
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
